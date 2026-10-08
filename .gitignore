@@ -1,0 +1,13 @@
+.DS_Store
+node_modules/
+
+# ── Datos reales de pacientes / facturación — NUNCA subir (el repo es público) ──
+app_data_rows.csv
+app_meta_rows.csv
+OIP_RECUPERACION_*.json
+OIP_respaldo_*.xlsx
+*.csv
+*.xlsx
+
+# Herramienta local de deploy (no se sube: contiene una ruta local)
+deploy.sh

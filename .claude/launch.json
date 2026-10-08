@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Static server (http-server)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", ".", "-p", "8000", "-c-1"],
+      "port": 8000
+    },
+    {
+      "name": "Verificacion Claude (puerto 8001)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", ".", "-p", "8001", "-c-1"],
+      "port": 8001
+    }
+  ]
+}
