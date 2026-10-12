@@ -1,0 +1,32 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Keepalive de Supabase (OIP) — evita que el proyecto se pause por inactividad.
+#  Supabase (plan gratis) pausa un proyecto si no recibe tráfico por ~7 días.
+#  Esta tarea le hace UNA consulta mínima todos los días, así nunca llega a los
+#  7 días sin actividad. No cuesta nada y no toca ningún dato.
+#  La URL y la anon key son PÚBLICAS (ya están en js/persistencia.js).
+#  Se puede correr a mano desde «Actions» → «Keepalive Supabase» → «Run workflow».
+# ─────────────────────────────────────────────────────────────────────────────
+name: Keepalive Supabase
+
+on:
+  schedule:
+    - cron: "41 7 * * *" # todos los días 07:41 UTC
+  workflow_dispatch: {} # permite correrlo manualmente
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping a Supabase (mantiene el proyecto activo)
+        run: |
+          URL="https://fviirbiuzfvjajyqldkn.supabase.co/rest/v1/app_data?select=*&limit=1"
+          ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2aWlyYml1emZ2amFqeXFsZGtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwOTI1MDIsImV4cCI6MjA5NTY2ODUwMn0.PKh13QTrpUa8O0tio9cNcZtBh2GuTwCUpvSLZc4kEBk"
+          code=$(curl -s -m 30 -o /dev/null -w "%{http_code}" \
+            -H "apikey: $ANON" -H "Authorization: Bearer $ANON" "$URL" || echo "000")
+          echo "Supabase respondió HTTP $code"
+          # Cualquier respuesta (incluso 4xx) significa que el proyecto recibió tráfico = sigue activo.
+          if [ "$code" = "000" ]; then
+            echo "❌ No se pudo contactar a Supabase."
+            exit 1
+          fi
+          echo "✅ Keepalive OK — el proyecto recibió actividad."
