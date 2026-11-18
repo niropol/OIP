@@ -161,9 +161,10 @@ function _renderTabMedico(regs, medicos, mes, mesLabel) {
 
     // ── Cálculo de honorarios (fuente única: honorariosMedico) ────────────────
     const totConsultas = contarConsultas(mRegs);
-    const { honOS, honSC, honEf, honTr, honExtra, honPract, aLiquidar } = honorariosMedico(mRegs);
+    const { honOS, honSC, honEf, honEfPend, honTr, honExtra, honPract, efPagCount, efPendCount, aLiquidar } = honorariosMedico(mRegs);
 
     const liq = getLiquidacion(mes, med.nombre);
+    const _medEnc = encodeURIComponent(med.nombre);
 
     // Consultorio(s) REAL(es) según las atenciones del mes (no la ficha del médico).
     // Si atendió en uno solo, muestra ese; si en ambos, muestra los dos.
@@ -228,8 +229,14 @@ function _renderTabMedico(regs, medicos, mes, mesLabel) {
               <div style="font-size:18px; font-weight:800; font-family:monospace; color:var(--accent2);">${fmt(honOS)}</div>
             </div>
             ${honEf > 0 ? `<div style="flex:1; min-width:120px;">
-              <div style="font-size:10px; color:var(--text3); text-transform:uppercase; margin-bottom:2px;">Part. efectivo (${totEf}) — ya cobró</div>
+              <div style="font-size:10px; color:var(--text3); text-transform:uppercase; margin-bottom:2px;">Part. efectivo (${efPagCount}) — ya cobró</div>
               <div style="font-size:18px; font-weight:800; font-family:monospace; color:var(--success);">${fmt(honEf)} ✓</div>
+              <button class="btn btn-secondary btn-sm" style="font-size:10px; padding:2px 6px; margin-top:3px;" onclick="toggleEfectivoPagadoMedico(decodeURIComponent('${_medEnc}'),'${mes}',false)">Marcar NO pagado</button>
+            </div>` : ''}
+            ${honEfPend > 0 ? `<div style="flex:1; min-width:120px;">
+              <div style="font-size:10px; color:var(--warn); text-transform:uppercase; margin-bottom:2px;">Part. efectivo (${efPendCount}) — pendiente</div>
+              <div style="font-size:18px; font-weight:800; font-family:monospace; color:var(--warn);">${fmt(honEfPend)}</div>
+              <button class="btn btn-secondary btn-sm" style="font-size:10px; padding:2px 6px; margin-top:3px;" onclick="toggleEfectivoPagadoMedico(decodeURIComponent('${_medEnc}'),'${mes}',true)">Marcar pagado</button>
             </div>` : ''}
             ${honTr > 0 ? `<div style="flex:1; min-width:120px;">
               <div style="font-size:10px; color:var(--text3); text-transform:uppercase; margin-bottom:2px;">Part. transf. (${totTr}) × ${fmt((DB.config.valorConsultaParticular/2))}</div>
@@ -254,6 +261,41 @@ function _renderTabMedico(regs, medicos, mes, mesLabel) {
   }).join('');
 }
 
+// Marcar/desmarcar como PAGADO el honorario en EFECTIVO de los particulares de un médico en un
+// mes (botones de la preliquidación "Para el médico"). También ajusta la caja chica: al marcar
+// pagado agrega el egreso de honorario que faltaba; al marcar NO pagado lo quita. Respeta el
+// cierre: si el mes está cerrado, avisa y no toca nada.
+function toggleEfectivoPagadoMedico(medico, mes, pagar) {
+  const liq = getLiquidacion(mes, medico);
+  if (liq && liq.estado === 'Cerrada') {
+    showToast('🔒 Mes cerrado. Reabrí la liquidación para cambiar el estado del efectivo.');
+    return;
+  }
+  const regs = (DB.registros || []).filter(r =>
+    r.medico === medico && r.os === 'Particular' && (r.fecha || '').startsWith(mes) && (r.partEfectivo || 0) > 0);
+  if (!regs.length) { showToast('No hay particulares en efectivo de este médico en el mes.'); return; }
+  regs.forEach(r => {
+    const ef = r.partEfectivo || 0;
+    const yaPag = efPagadosReg(r);
+    if (pagar && yaPag < ef) {
+      const vEf = r.partEfVal || DB.config.valorConsultaParticular;
+      DB.cajaChica.push({
+        id: DB.nextId++, fecha: r.fecha, consultorio: r.consultorio, tipo: 'Egreso',
+        concepto: `Pago honorario efectivo — ${soloApellido(medico)} — ${r.fecha}`,
+        origen: 'Honorario', monto: (ef - yaPag) * (vEf / 2), regId: r.id
+      });
+    } else if (!pagar && yaPag > 0) {
+      DB.cajaChica = (DB.cajaChica || []).filter(c => !(c.regId === r.id && c.origen === 'Honorario'));
+    }
+    r.honorarioPagadoEfectivo = !!pagar;      // marca explícita (ya no queda "sin marca")
+    r.honorEfPagados = pagar ? ef : 0;
+  });
+  marcarCambios('registros'); marcarCambios('cajaChica');
+  if (typeof generarPreliq === 'function') generarPreliq();
+  if (typeof renderCajaChica === 'function') renderCajaChica();
+  showToast(pagar ? '✓ Efectivo marcado como PAGADO al médico' : '✗ Efectivo marcado como PENDIENTE (va a depositar)');
+}
+
 // ── TAB ADMIN — detalle financiero completo ──────────────────────────────────
 function _renderTabAdmin(regs, medicos, mes, mesLabel) {
   const el = document.getElementById('preliq-admin-resultado');
@@ -267,7 +309,7 @@ function _renderTabAdmin(regs, medicos, mes, mesLabel) {
     const totEf   = mRegs.reduce((s,r)=>s+r.partEfectivo,0);
     const totTr   = mRegs.reduce((s,r)=>s+r.partTransf,0);
     const totTodo = mRegs.reduce((s,r)=>s+totalConsultasReg(r),0);
-    const { honOS, honSC, honEf, honTr, aLiquidar } = honorariosMedico(mRegs);
+    const { honOS, honSC, honEf, honEfPend, honTr, efPagCount, efPendCount, aLiquidar } = honorariosMedico(mRegs);
     const factBruto= mRegs.reduce((s,r)=>s+facturadoReg(r),0);
 
     // ── Derivaciones operadas por este médico (como derivante) ───────────────
@@ -356,7 +398,7 @@ function _renderTabAdmin(regs, medicos, mes, mesLabel) {
                 <td style="padding:7px 10px; text-align:center; font-weight:700;">${totEf}</td>
                 <td colspan="2" style="padding:7px 10px; text-align:right; font-family:monospace;">${fmt((totEf*DB.config.valorConsultaParticular))}</td>
                 <td style="padding:7px 10px; text-align:right; font-family:monospace; font-weight:700;">${fmt((totEf*DB.config.valorConsultaParticular))}</td>
-                <td style="padding:7px 10px; text-align:right; font-family:monospace; color:var(--success);">${fmt(honEf)} ✓</td>
+                <td style="padding:7px 10px; text-align:right; font-family:monospace;">${honEf>0?`<span style="color:var(--success);">${fmt(honEf)} ✓ (${efPagCount})</span>`:''}${honEf>0&&honEfPend>0?'<br>':''}${honEfPend>0?`<span style="color:var(--warn);">${fmt(honEfPend)} a dep. (${efPendCount})</span>`:''}</td>
               </tr>`:''}
               ${totTr>0?`<tr style="border-bottom:1px solid var(--border);">
                 <td style="padding:7px 10px; color:var(--accent2);">🏦 Part. Transferencia</td>
@@ -397,7 +439,7 @@ function _renderTabCierre(medicos, mes, mesLabel, regs) {
     const totEf = mRegs.reduce((s,r)=>s+r.partEfectivo,0);
     const totTr = mRegs.reduce((s,r)=>s+r.partTransf,0);
     const totConsultas = contarConsultas(mRegs);
-    const { honOS, honSC, honEf, honTr, honPract, aLiquidar } = honorariosMedico(mRegs);
+    const { honOS, honSC, honEf, honEfPend, honTr, honPract, efPagCount, efPendCount, aLiquidar } = honorariosMedico(mRegs);
 
     const liq = getLiquidacion(mes, med.nombre) || {};
 
@@ -471,8 +513,12 @@ function _renderTabCierre(medicos, mes, mesLabel, regs) {
               <span class="finance-num" style="font-weight:700;">${fmt(honTr)}</span>
             </div>`:''}
             ${honEf>0?`<div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; color:var(--success);">
-              <span>💵 Efectivo ya cobrado — ${totEf} × ${fmt((DB.config.valorConsultaParticular/2))}</span>
+              <span>💵 Efectivo ya cobrado — ${efPagCount} × ${fmt((DB.config.valorConsultaParticular/2))}</span>
               <span class="finance-num" style="font-weight:700;">${fmt(honEf)} ✓</span>
+            </div>`:''}
+            ${honEfPend>0?`<div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; color:var(--warn);">
+              <span>💵 Efectivo PENDIENTE de pago — ${efPendCount} × ${fmt((DB.config.valorConsultaParticular/2))}</span>
+              <span class="finance-num" style="font-weight:700;">${fmt(honEfPend)}</span>
             </div>`:''}
             ${honPract>0?`<div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; color:#5a3a99;">
               <span>🔬 Estudios / prácticas</span>
@@ -676,7 +722,7 @@ function _cuerpoLiquidacion(medico, mes, plano) {
   const totEf = regs.reduce((s,r)=>s+r.partEfectivo,0);
   const totTr = regs.reduce((s,r)=>s+r.partTransf,0);
   const totConsultas = contarConsultas(regs);
-  const { honOS, honSC, honEf, honTr, honExtra, honPract, aLiquidar } = honorariosMedico(regs);
+  const { honOS, honSC, honEf, honEfPend, honTr, honExtra, honPract, efPendCount, aLiquidar } = honorariosMedico(regs);
   const totalPacientes = regs.reduce((s,r) => s + totalConsultasReg(r), 0);
   const lineaTotalPacientes = totalPacientes > 0 ? `👥 *Total de pacientes: ${totalPacientes}*\n` : '';
   const porSede = {};
@@ -686,7 +732,7 @@ function _cuerpoLiquidacion(medico, mes, plano) {
   const lineaTotalOS = `🏥 Total obra social: ${totConsultas} consultas\n`;
   const totPart = totEf + totTr;
   const lineaParticulares = totPart > 0 ? `👤 Particulares: ${totPart} (💵 ${totEf} efectivo · 🏦 ${totTr} transferencia)\n` : '';
-  const lineasHonorarios = `💰 *Honorarios:*\nObra social → *${fmt(honOS)}*\n${honPract>0?`Estudios/prácticas → *${fmt(honPract)}*\n`:''}${totTr>0?`Transferencia particulares → *${fmt(honTr)}*\n`:''}${honSC>0?`Sin cargo → *${fmt(honSC)}*\n`:''}${honExtra>0?`Derivaciones → *${fmt(honExtra)}*\n`:''}${honEf>0?`💵 Efectivo ya cobrado: ${fmt(honEf)}\n`:''}`;
+  const lineasHonorarios = `💰 *Honorarios:*\nObra social → *${fmt(honOS)}*\n${honPract>0?`Estudios/prácticas → *${fmt(honPract)}*\n`:''}${totTr>0?`Transferencia particulares → *${fmt(honTr)}*\n`:''}${honEfPend>0?`Efectivo pendiente (${efPendCount}) → *${fmt(honEfPend)}*\n`:''}${honSC>0?`Sin cargo → *${fmt(honSC)}*\n`:''}${honExtra>0?`Derivaciones → *${fmt(honExtra)}*\n`:''}${honEf>0?`💵 Efectivo ya cobrado (aparte): ${fmt(honEf)}\n`:''}`;
   const msg = `👁 *OIP Oftalmología Integral*\n📋 *Liquidación ${mesLabel}*\n\n👨‍⚕️ ${medico}\n\n${lineaTotalPacientes}${desgloseSede}${lineaTotalOS}${lineaParticulares}\n${lineasHonorarios}\n*A depositar: ${fmt(aLiquidar)}*\n\nPor favor remitir factura para procesar el pago. ¡Muchas gracias!`;
   return plano ? msg.replace(/\*/g, '') : msg;
 }
@@ -974,7 +1020,7 @@ function imprimirLiquidacion(medico, mes) {
   const totEf = regs.reduce((s,r)=>s+r.partEfectivo,0);
   const totTr = regs.reduce((s,r)=>s+r.partTransf,0);
   const totConsultas = contarConsultas(regs);
-  const { honOS, honSC, honEf, honTr, honPract, aLiquidar } = honorariosMedico(regs);
+  const { honOS, honSC, honEf, honEfPend, honTr, honPract, efPagCount, efPendCount, aLiquidar } = honorariosMedico(regs);
   const liq = getLiquidacion(mes, medico) || {};
 
   // Tabla por día/OS
@@ -1054,8 +1100,12 @@ function imprimirLiquidacion(medico, mes) {
           <td style="padding:10px 4px;">Estudios / prácticas</td>
           <td style="text-align:right;font-weight:700;padding:10px 4px;font-family:monospace;">${fmt(honPract)}</td>
         </tr>`:''}
+        ${honEfPend>0?`<tr style="border-bottom:1px solid #e0e0e0;">
+          <td style="padding:10px 4px;">Efectivo pendiente de pago — ${efPendCount} × ${fmt((DB.config.valorConsultaParticular/2))}</td>
+          <td style="text-align:right;font-weight:700;padding:10px 4px;font-family:monospace;">${fmt(honEfPend)}</td>
+        </tr>`:''}
         ${honEf>0?`<tr style="border-bottom:1px solid #e0e0e0;color:green;">
-          <td style="padding:10px 4px;">Efectivo ya cobrado — ${totEf} × ${fmt((DB.config.valorConsultaParticular/2))}</td>
+          <td style="padding:10px 4px;">Efectivo ya cobrado (aparte) — ${efPagCount} × ${fmt((DB.config.valorConsultaParticular/2))}</td>
           <td style="text-align:right;font-weight:700;padding:10px 4px;font-family:monospace;">${fmt(honEf)} ✓</td>
         </tr>`:''}
         <tr style="border-top:2px solid #333;">

@@ -299,13 +299,29 @@ function honorPracticaReg(r, med) {
   return Math.round(base * 100) / 100;
 }
 
-// Honorario A LIQUIDAR de un registro: lo que falta pagarle al médico. Igual al
-// generado, salvo en Particular EFECTIVO, que ya se le pagó en el momento de la
-// atención → solo cuenta la parte por transferencia.
+// ── FUENTE ÚNICA de cuántas consultas particulares en EFECTIVO de un registro tienen el
+//    honorario del médico YA PAGADO (en el acto). Decide "ya cobró" vs "a depositar" del efectivo.
+//   - honorarioPagadoEfectivo === true  → modal: se pagó (todas las del registro)
+//   - honorarioPagadoEfectivo === false → modal: NO se pagó (ninguna) ← el usuario marcó que no
+//   - honorEfPagados (número)           → carga masiva: cuántas se pagaron (0..partEfectivo)
+//   - sin ninguna marca (dato viejo)    → se asume pagado (no altera meses ya cerrados/liquidados)
+function efPagadosReg(r) {
+  const ef = r.partEfectivo || 0;
+  if (ef <= 0) return 0;
+  if (r.honorarioPagadoEfectivo === true) return ef;
+  if (r.honorarioPagadoEfectivo === false) return 0;
+  if (typeof r.honorEfPagados === 'number') return Math.max(0, Math.min(r.honorEfPagados, ef));
+  return ef;   // dato viejo sin marca → asumir pagado (comportamiento previo)
+}
+
+// Honorario A LIQUIDAR de un registro: lo que falta pagarle al médico. En Particular EFECTIVO,
+// solo cuenta lo que NO se pagó en el acto (efPagadosReg); lo ya pagado no se vuelve a liquidar.
 function honorALiquidarReg(r) {
   if (r.os === 'Particular') {
+    const vEf = r.partEfVal || DB.config.valorConsultaParticular;
     const vTr = r.partTrVal || r.partEfVal || DB.config.valorConsultaParticular;
-    return (r.partTransf || 0) * (vTr / 2);
+    const efPend = (r.partEfectivo || 0) - efPagadosReg(r);   // efectivo NO pagado → se deposita
+    return (r.partTransf || 0) * (vTr / 2) + efPend * (vEf / 2);
   }
   return honorMedicoReg(r);
 }
@@ -314,21 +330,30 @@ function honorALiquidarReg(r) {
 // Evita que cada vista (panel, mensaje de cierre, desglose) recalcule distinto.
 //   honOS : consultas OS × honorario fijo
 //   honSC : SinCargo (lo que paga el paciente)
-//   honEf : particulares en efectivo (50% de lo cobrado) — YA PAGADO en el momento
+//   honOS : consultas OS × honorario fijo
+//   honSC : SinCargo (lo que paga el paciente)
+//   honEf : particulares en efectivo CON honorario YA PAGADO en el acto (ya cobró) — NO a liquidar
+//   honEfPend : particulares en efectivo cuyo honorario NO se pagó → SÍ va a liquidar (a depositar)
 //   honTr : particulares por transferencia (50% de lo cobrado)
 //   honExtra : pagos de derivación al médico derivante (pagoExtra)
-//   aLiquidar : honOS + honTr + honSC + honExtra  (el efectivo NO se incluye: ya se pagó)
 //   honPract : estudios/prácticas OS × tarifa del médico (honorPracticaReg)
-//   aLiquidar : honOS + honTr + honSC + honExtra + honPract  (el efectivo NO: ya se pagó)
+//   efPagCount / efPendCount : cantidad de consultas efectivo pagadas / pendientes
+//   aLiquidar : honOS + honTr + honSC + honExtra + honPract + honEfPend  (el efectivo YA pagado NO)
 function honorariosMedico(regs) {
-  let honOS = 0, honSC = 0, honEf = 0, honTr = 0, honExtra = 0, honPract = 0;
+  let honOS = 0, honSC = 0, honEf = 0, honEfPend = 0, honTr = 0, honExtra = 0, honPract = 0;
+  let efPagCount = 0, efPendCount = 0;
   (regs || []).forEach(r => {
     if (r.pagoExtra) {                       // pago de derivación
       honExtra += r.pagoExtra;
     } else if (r.os === 'Particular') {
       const vEf = r.partEfVal || DB.config.valorConsultaParticular;
       const vTr = r.partTrVal || r.partEfVal || DB.config.valorConsultaParticular;
-      honEf += (r.partEfectivo || 0) * (vEf / 2);
+      const ef = r.partEfectivo || 0;
+      const pag = efPagadosReg(r);
+      const pend = ef - pag;
+      honEf     += pag  * (vEf / 2);   // ya cobrado en el acto (no se vuelve a pagar)
+      honEfPend += pend * (vEf / 2);   // efectivo sin pagar → a depositar con el resto
+      efPagCount += pag; efPendCount += pend;
       honTr += (r.partTransf || 0) * (vTr / 2);
     } else if (r.os === 'SinCargo') {
       honSC += (r.cantidad || 1) * (r.valorUnit || 0.1);
@@ -337,5 +362,6 @@ function honorariosMedico(regs) {
       honPract += honorPracticaReg(r);
     }
   });
-  return { honOS, honSC, honEf, honTr, honExtra, honPract, aLiquidar: honOS + honTr + honSC + honExtra + honPract };
+  return { honOS, honSC, honEf, honEfPend, honTr, honExtra, honPract, efPagCount, efPendCount,
+           aLiquidar: honOS + honTr + honSC + honExtra + honPract + honEfPend };
 }

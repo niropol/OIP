@@ -2836,8 +2836,8 @@
 
 <!-- Módulos extraídos (Etapa 2). Se cargan antes del script principal.
      Orden: datos (DB) → calculos (dependen de DB) → script principal. -->
-<script src="js/datos.js?v=113"></script>
-<script src="js/calculos.js?v=113"></script>
+<script src="js/datos.js?v=114"></script>
+<script src="js/calculos.js?v=114"></script>
 
 <script>
 // ── ESTADO / DATOS movidos a js/datos.js (Etapa 2) ──────────────────────────
@@ -4227,19 +4227,19 @@ function runDiagnosticoDatos() {
      persistencia.js (arranque()→init() necesita initDashboard ya definido). -->
 <!-- ui-atenciones primero: contiene helpers compartidos (getOSList, esConsulta,
      getExentaForOS, getIVALabel, makeOSSelect) usados por otras secciones. -->
-<script src="js/ui-atenciones.js?v=113"></script>
-<script src="js/ui-vistas.js?v=113"></script>
-<script src="js/ui-medicos.js?v=113"></script>
-<script src="js/ui-alarmas.js?v=113"></script>
-<script src="js/ui-derivaciones.js?v=113"></script>
-<script src="js/ui-finanzas.js?v=113"></script>
-<script src="js/ui-preliquidacion.js?v=113"></script>
-<script src="js/ui-configuracion.js?v=113"></script>
-<script src="js/ui-modal-atencion.js?v=113"></script>
-<script src="js/ui-os-crud.js?v=113"></script>
+<script src="js/ui-atenciones.js?v=114"></script>
+<script src="js/ui-vistas.js?v=114"></script>
+<script src="js/ui-medicos.js?v=114"></script>
+<script src="js/ui-alarmas.js?v=114"></script>
+<script src="js/ui-derivaciones.js?v=114"></script>
+<script src="js/ui-finanzas.js?v=114"></script>
+<script src="js/ui-preliquidacion.js?v=114"></script>
+<script src="js/ui-configuracion.js?v=114"></script>
+<script src="js/ui-modal-atencion.js?v=114"></script>
+<script src="js/ui-os-crud.js?v=114"></script>
 
 <!-- Persistencia (Supabase). Se carga DESPUÉS del script principal: al final
      dispara arranque(), que necesita init/DB/render ya definidos. -->
-<script src="js/persistencia.js?v=113"></script>
+<script src="js/persistencia.js?v=114"></script>
 </body>
 </html>

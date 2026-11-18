@@ -40,8 +40,8 @@ function renderMedicosGrid() {
     // aLiquidar de honorariosMedico() ya suma honOS + honTr + honSC + honExtra (excluye
     // el efectivo, que ya se cobró) — antes acá "A liquidar" solo sumaba honOS+honTransf,
     // dejando afuera SinCargo y pagos de derivación si el médico tuvo alguno ese mes.
-    const { honOS, honEf: honEfec, honTr: honTransf, honPract, aLiquidar: totalLiquidar } = honorariosMedico(resMes);
-    // Ya cobró en efectivo = honorario particulares efectivo
+    const { honOS, honEf: honEfec, honEfPend: honEfPendMes, honTr: honTransf, honPract, efPagCount: efPagMes, efPendCount: efPendMes, aLiquidar: totalLiquidar } = honorariosMedico(resMes);
+    // Ya cobró en efectivo = honorario particulares efectivo YA PAGADO (los pendientes van a liquidar)
     const yaCobroEfectivo = honEfec;
     // Cantidad de estudios/prácticas del mes (para el rótulo del pago por práctica)
     const mesEstPract = resMes.reduce((s,r) => {
@@ -111,12 +111,12 @@ function renderMedicosGrid() {
             <div>
               <div style="font-size:10px; color:var(--text3);">A liquidar este mes</div>
               <div style="font-size:17px; font-weight:700; font-family:monospace; color:${med.color};">${fmt(totalLiquidar)}</div>
-              <div style="font-size:9px; color:var(--text3);">OS (${mesConsulOS} cons.) + Part. transf. (${mesTransf})</div>
+              <div style="font-size:9px; color:var(--text3);">OS (${mesConsulOS} cons.) + Part. transf. (${mesTransf})${honEfPendMes > 0 ? ` + Ef. pend. (${efPendMes})` : ''}</div>
             </div>
             <div style="text-align:right;">
               <div style="font-size:10px; color:var(--text3);">Cobrado efectivo</div>
               <div style="font-size:14px; font-weight:600; color:var(--success);">${fmt(yaCobroEfectivo)}</div>
-              <div style="font-size:9px; color:var(--text3);">${mesEfec} Part. ef.</div>
+              <div style="font-size:9px; color:var(--text3);">${efPagMes} Part. ef.</div>
             </div>
           </div>
 

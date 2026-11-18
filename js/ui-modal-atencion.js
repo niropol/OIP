@@ -356,6 +356,8 @@ function guardarAtencion() {
         });
         _regPart.honorarioPagadoEfectivo = true;  // marca: ya cobrado, no pagar de nuevo en liquidación
         showToast(`✓ Pagado ${fmt(honMit)} a ${soloApellido(medico)} (efectivo)`);
+      } else {
+        _regPart.honorarioPagadoEfectivo = false;  // NO se pagó → queda pendiente (va a "a depositar")
       }
     }
     // Transferencia → entra a Caja (banco), no a caja chica

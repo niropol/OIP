@@ -54,6 +54,16 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "Faltan los secrets GMAIL_USER / GMAIL_APP_PASSWORD en Supabase." }, 500);
   }
 
+  // Los ENCABEZADOS (From/Subject) deben ir en ASCII puro. Si llevan acentos ("Oftalmología",
+  // "Preliquidación") o guiones largos, se codifican como "encoded-words" y, al plegarse el
+  // header, algunos servidores los parten mal → el mail llega mostrando el código crudo (todo el
+  // MIME como texto). Por eso acá se quitan acentos y caracteres no-ASCII SOLO de los headers.
+  // El CUERPO (content/html) sí puede tener acentos y emoji (va codificado en el body, no rompe).
+  const soloAscii = (s: string) => (s || "")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")   // quita acentos (á→a, í→i, ñ→n queda n)
+    .replace(/[—–]/g, "-")                               // guiones largos → guión normal
+    .replace(/[^\x00-\x7E]/g, "");                        // descarta cualquier otro no-ASCII (emoji, etc.)
+
   try {
     const client = new SMTPClient({
       connection: {
@@ -64,10 +74,10 @@ Deno.serve(async (req) => {
       },
     });
     await client.send({
-      from: `OIP Oftalmología Integral <${user}>`,
+      from: `OIP Oftalmologia Integral <${user}>`,                        // sin acentos (header ASCII)
       to,
-      subject,
-      content: text || "Preliquidación en el cuerpo del mensaje.",
+      subject: soloAscii(subject) || "Preliquidacion - OIP Oftalmologia Integral",
+      content: text || "Preliquidacion en el cuerpo del mensaje.",
       html: html || undefined,
     });
     await client.close();

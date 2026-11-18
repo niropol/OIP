@@ -26,7 +26,7 @@ const EXPONER = [
   'facturadoReg', 'totalReg', 'ivaReg', 'subtotalNeto', 'honorMedicoReg',
   'totalesOS', 'netoOS', 'copagoAdelantoReg', 'getExentaForOS',
   'esConsulta', 'esConsultaReg', 'cantConsultaHon', 'totalConsultasReg',
-  'honorALiquidarReg', 'honorariosMedico', 'exentaReg', 'facturaPendiente',
+  'honorALiquidarReg', 'honorariosMedico', 'exentaReg', 'facturaPendiente', 'efPagadosReg',
   'ESTADOS_FACTURA_PENDIENTE', 'honorPracticaReg',
   // ABM de médicos (alta/edición + tarifa de estudios/prácticas) + reparación de huérfanos
   'guardarMedico', 'editarMedico', 'abrirNuevoMedico',
@@ -73,7 +73,7 @@ const EXPONER = [
   'agregarFilaConsulta', 'agregarFilaPrestacion', 'onCMConsultaOSChange', 'onCMPrestOSChange',
   'abrirPagoDerivacion',
   // preliquidación (cierre de mes por médico) + foto de liquidación (drift)
-  'getLiquidacion', 'regBloqueado', 'cerrarMesMedico', 'reabrirMesMedico',
+  'getLiquidacion', 'regBloqueado', 'cerrarMesMedico', 'reabrirMesMedico', 'toggleEfectivoPagadoMedico',
   '_fotoLiquidacion', '_driftLiquidacion', '_regsMedicoMes',
   'marcarFacturaRecibida', 'confirmarPagoEnviado', 'contarConsultas',
   'generarPreliq', 'enviarLiquidacionCierre', 'enviarLiquidacionMail', '_cuerpoLiquidacion',

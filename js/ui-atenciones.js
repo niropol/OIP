@@ -264,18 +264,23 @@ function _sincronizarCajaRegistro(r) {
         id: DB.nextId++, fecha, consultorio, tipo: 'Ingreso',
         concepto: `Particular efectivo — ${ape}`, origen: 'Efectivo', monto: efMonto, regId: r.id,
       });
-      // Honorario efectivo ya pagado en el acto: se conserva la decisión original.
-      if (r.honorarioPagadoEfectivo) {
+      // Honorario efectivo ya pagado en el acto: se recrea el egreso SOLO por los que están
+      // pagados (efPagadosReg = fuente única; respeta honorarioPagadoEfectivo y honorEfPagados).
+      const _pagEf = (typeof efPagadosReg === 'function')
+        ? efPagadosReg(r)
+        : (r.honorarioPagadoEfectivo ? (r.partEfectivo || 0) : 0);
+      if (_pagEf > 0) {
         DB.cajaChica.push({
           id: DB.nextId++, fecha, consultorio, tipo: 'Egreso',
-          concepto: `Pago honorario efectivo — ${ape} — ${fecha}`, origen: 'Honorario', monto: efMonto / 2, regId: r.id,
+          concepto: `Pago honorario efectivo — ${ape} — ${fecha}`, origen: 'Honorario', monto: _pagEf * ((r.partEfVal || 0) / 2), regId: r.id,
         });
       }
-    } else if (r.honorarioPagadoEfectivo) {
-      // Ya NO hay parte en efectivo (ej. se editó a transferencia): el flag "honorario
-      // pagado en efectivo" queda sin sentido. Limpiarlo evita que una edición futura de
+    } else if (r.honorarioPagadoEfectivo || typeof r.honorEfPagados === 'number') {
+      // Ya NO hay parte en efectivo (ej. se editó a transferencia): las marcas de "honorario
+      // pagado en efectivo" quedan sin sentido. Limpiarlas evita que una edición futura de
       // vuelta a efectivo recree el egreso sin preguntar, afirmando un pago que no ocurrió.
       delete r.honorarioPagadoEfectivo;
+      delete r.honorEfPagados;
     }
     // Transferencia → Caja (banco)
     if (trMonto > 0) {
@@ -1696,7 +1701,9 @@ function _ejecutarGuardarCargaMasiva() {
         pagados++;
       }
     }
-    if (pagados > 0 && window._regPartMasiva) window._regPartMasiva.honorEfPagados = pagados;
+    // Registrar SIEMPRE cuántos se pagaron (incluso 0), para que el reporte sepa qué quedó
+    // pendiente y no lo marque como "ya cobró" si no se pagó.
+    if (window._regPartMasiva) window._regPartMasiva.honorEfPagados = pagados;
     if (pagados > 0) showToast(`✓ Pagado ${fmt(honMit*pagados)} a ${soloApellido(medico)} (${pagados} en efectivo)`);
   }
   // Transferencia particular → entra a Caja (banco), no a caja chica
